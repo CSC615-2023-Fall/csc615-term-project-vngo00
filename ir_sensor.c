@@ -1,3 +1,4 @@
+/*
 #include "ir_sensor.h"
 #include <stdbool.h>
 
@@ -97,3 +98,4 @@ void* handleSensor(void* args) {
 
     return NULL;
 }
+*/

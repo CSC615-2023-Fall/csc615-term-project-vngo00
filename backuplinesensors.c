@@ -8,56 +8,37 @@
 #include <signal.h>
 #include "motor.h"  
 #include <stdbool.h>
-//#include "ir_sensor.c"
+#include "ir_sensor.c"
 
 #include "PCA9685.h"
 #include "DEV_Config.h"
 #include <pigpio.h>
 #include <unistd.h>
-#include <time.h>
-
-#define HIGH 1
-#define LOW 0
 
 #define LINE_SENSOR_LEFT 18
 #define LINE_SENSOR_MIDDLE 22
 #define LINE_SENSOR_RIGHT 23
 
 
-#define IR_SENSOR_FRONT 17 
-#define IR_SENSOR_LEFT  6 
-#define IR_SENSOR_SIDE  5 
+#define IR_SENSOR_FRONT  
+#define IR_SENSOR_LEFT   
+#define IR_SENSOR_RIGHT  
 
-//#define SONAR_TRIGGER 0
-//#define SONAR_ECHO    5
 
+#define OUT_BTN 24
 #define IN_BTN 25
 
-struct sensorStruct {
-	volatile int *sensorValue;
-	int sensorPin;
-};
-/*
-struct sonarStruct {
-	volatile double *distance;
-	int triggerPin;
-	int echoPin;
-};
-*/
+
 volatile sig_atomic_t terminate = 0;
-//volatile int terminate = 0;
 
 // shared variables for sensor readings
 volatile int leftSensorValue, middleSensorValue, rightSensorValue;
 volatile int combinedSensorsValue;  // shared variable for combined sensor readings
-volatile double sonarDistance;
+
 //Declare and initialize a variable that indicates whether obstacle avoidance is currently happening
 volatile bool avoidingObstacle = false;
-// shared variables for ir readings
-volatile int IRfront, IRleft, IRside;
-pthread_mutex_t sensorMutex = PTHREAD_MUTEX_INITIALIZER;  // mutex for sensor value updates
 
-double soundVelocity = 331.0;
+pthread_mutex_t sensorMutex = PTHREAD_MUTEX_INITIALIZER;  // mutex for sensor value updates
 
 // Function prototypes
 void *readLeftSensor(void *arg);
@@ -66,11 +47,6 @@ void *readRightSensor(void *arg);
 void *combineSensors(void *arg);
 void *masterControl(void *arg);
 void intHandler(int);
-void *readIRSensor(void *arg);
-//void *readSonar(void *arg);
-
-
-
 int main(void) {
     if (gpioInitialise() < 0) {
         fprintf(stderr, "pigpio initialisation failed\n");
@@ -86,18 +62,11 @@ int main(void) {
     gpioSetMode(IN_BTN, PI_INPUT);
     gpioSetPullUpDown(IN_BTN, PI_PUD_UP);
 	
-    // initialize line sensors
+
     gpioSetMode(LINE_SENSOR_LEFT, PI_INPUT);
     gpioSetMode(LINE_SENSOR_MIDDLE, PI_INPUT);
     gpioSetMode(LINE_SENSOR_RIGHT, PI_INPUT);
 	
-	
-    // initialize IR sensors
-    gpioSetMode(IR_SENSOR_FRONT, PI_INPUT);
-    //gpioSetMode(IR_SENSOR_LEFT, PI_INPUT);
-    //gpioSetMode(IR_SENSOR_RIGHT, PI_INPUT);
-
-
     signal(SIGINT,intHandler); 
     sleep(0.5);
 	
@@ -105,45 +74,21 @@ int main(void) {
     while(gpioRead(IN_BTN)){} //stuck here
 
    // gpioSetMode(OUT_BTN, PI_INPUT);
-	
-    struct sensorStruct IRsensor[3];
 
-    IRsensor[0].sensorPin = IR_SENSOR_FRONT;
-    IRsensor[0].sensorValue = &IRfront;
-
-    IRsensor[1].sensorPin = IR_SENSOR_LEFT;
-    IRsensor[1].sensorValue = &IRleft;
-
-    IRsensor[2].sensorPin = IR_SENSOR_SIDE;
-    IRsensor[2].sensorValue = &IRside;
-
-	
-    // initialize sonar struct
-   // struct sonarStruct sonar;
-    //sonar.triggerPin = SONAR_TRIGGER;
-    //sonar.echoPin = SONAR_ECHO;
-    //sonar.distance = &sonarDistance;
 
 	
 
-    pthread_t threads[8];
+    pthread_t threads[5];
     pthread_create(&threads[0], NULL, readLeftSensor, NULL);
     pthread_create(&threads[1], NULL, readMiddleSensor, NULL);
     pthread_create(&threads[2], NULL, readRightSensor, NULL);
     pthread_create(&threads[3], NULL, combineSensors, NULL);
     pthread_create(&threads[4], NULL, masterControl, NULL);
 	
-    // create threads for ir
-    
-    pthread_create(&threads[5], NULL, readIRSensor,(void *) &IRsensor[0]);
-    pthread_create(&threads[6], NULL, readIRSensor, (void *) &IRsensor[1]);
-    pthread_create(&threads[7], NULL, readIRSensor, (void *) &IRsensor[2]);
-
-    //pthread_create(&threads[6], NULL, readSonar, (void *) &sonar);
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 5; i++) {
         pthread_join(threads[i], NULL);
     }
- /*  
+    
     // GPIO pins for IR sensors
     int irFrontPin = IR_SENSOR_FRONT;
     int irLeftPin = IR_SENSOR_LEFT;
@@ -159,24 +104,12 @@ int main(void) {
     pthread_join(irFrontThread, NULL);
     pthread_join(irLeftThread, NULL);
     pthread_join(irRightThread, NULL);
-*/
+
 
 
     motorStop(); // stop the motor when the program terminates
     gpioTerminate();
     return 0;
-}
-
-
-void *readIRSensor(void *arg) {
-	struct sensorStruct *sensor = (struct sensorStruct *) arg;
-       		
-	
-	while(!terminate) {
-		*(sensor->sensorValue) = gpioRead(sensor->sensorPin);
-
-	}
-	return NULL;
 }
 
 void *readLeftSensor(void *arg) {
@@ -225,23 +158,6 @@ void *masterControl(void *arg) {
     int speed = 85;  // Initial speed to overcome static friction
     int constantSpeed = 80;  // Constant speed for normal operation
     int left = 0;
-	
-    setDirection(FORWARD);
-    //curve(82,86);
-    //forward(100, FORWARD);
-  //  sleep(100);
-   
-
-    // testing purposes
-    volatile double leftSpeed = 90;
-    volatile double rightSpeed = 0;
-    volatile int avoiding = 0;
-    volatile double mult = 1.0;
-
-	speed = 85;
-
-
-
     while (!terminate) {
         //pthread_mutex_lock(&sensorMutex);
         int sensors = combinedSensorsValue;
@@ -254,70 +170,28 @@ void *masterControl(void *arg) {
             speed = constantSpeed;    // Then set to constant speed
         }
 	*/
-
-	
-
     //Obstacle avoidance logic
-   // if(obstacleFront){
-   if(!IRfront){
+    if(obstacleFront){
+        avoidingObstacle = true;
 
-	
-	//forward(speed, REVERSE);
-	//usleep(300000);
-	//curve(leftSpeed, rightSpeed);
-	//usleep(500000);
-	while (avoiding ||  IRfront == 0 || combinedSensorsValue == 0 ) {
-	    if ((int)rightSpeed > 90){
-		    rightSpeed =90.0;
-	    }
-	    if ( (int) rightSpeed < 40) {
-		    rightSpeed = 40.0;
-	    }
-	    if ( (int) leftSpeed > 90) {
-		    leftSpeed =90.0;
-	    }
-	    if ( (int) leftSpeed < 40) {
-		    leftSpeed = 40.0;
-	    }
-	    curve(leftSpeed, rightSpeed);	
-	    printf("left: %.2f\n right %.2f\n", leftSpeed, rightSpeed);
-	    if (IRfront == 0 || (IRleft == 0 && IRside == 0) || IRleft == 0){
-			rightSpeed -= (0.54);
-			leftSpeed += (0.4 );
-		//	mult += 0.1;
-	    } else { // turnign left
-		    rightSpeed += (1.2);
-		    leftSpeed -= ( 1.0);
-		    //mult -= 0.1;
-	    }
-		/*
-	    if ( (int) mult < 1) {
-		    mult = 1.0;
-	    }
-	    else if ( (int) mult >= 2) {
-		    mult = 2.0;
-	    }
-	    printf("multiplier factor : %f\n", mult);
-	    */
-	    //usleep(100);
-    	}	
-
-
-	while(IRside == 0) {
-		turnRight(speed);
-	}
-
-
+            // Check for obstacle on the left and right
+            if (!obstacleLeft) {
+                turnLeft();  // Turn left if no obstacle on the left
+            } else if (!obstacleRight) {
+                turnRight();  // Turn right if no obstacle on the right
+            }
+            
+            avoidingObstacle = false;
     } else {
         switch (sensors) {
             case 0:   // 000 - lost the line
-                if (left)
+                //motorStop();
+		if (left)
 			turnLeft(speed);
 		else
 			turnRight(speed);
                 break;
-//motorStop();
-		            case 1:   // 100 - left sensor active, turn left
+            case 1:   // 100 - left sensor active, turn left
                 //turnLeft();
 		turnLeft(speed);
 		left = 1;
@@ -342,14 +216,8 @@ void *masterControl(void *arg) {
                 turnRight(speed);
 		left = 0;
                 break;
-            case 7: 
-		if (left)
-			turnLeft(speed);
-		else
-			turnRight(speed);
-                break;
-  // 111 - all sensors active, wide line or intersection
-                //forward(speed, FORWARD);
+            case 7:   // 111 - all sensors active, wide line or intersection
+                forward(speed, FORWARD);
                 break;
             default:
                 motorStop();  // handle unexpected cases
@@ -358,8 +226,6 @@ void *masterControl(void *arg) {
 	
 
     }
-    leftSpeed = 90;
-    rightSpeed = 0;
         
 
         usleep(10000);  // 100 ms delay
@@ -374,32 +240,3 @@ void intHandler(int signo) {
     gpioTerminate();
     exit(0);
 }
-
-/*
-void *readSonar(void *arg){
-	struct sonarStruct *sonar = (struct sonarStruct *) arg;
-	
-	double start, stop, duration;
-	while(!terminate){
-	gpioWrite(sonar->triggerPin, HIGH);
-	usleep(10);
-	gpioWrite(sonar->triggerPin, LOW);
-
-	while(gpioRead(sonar->echoPin) == LOW){}
-
-	start = clock() / (1.0 * CLOCKS_PER_SEC);
-
-	while(gpioRead(sonar->echoPin) == HIGH){}
-
-	stop = clock() / (1.0 * CLOCKS_PER_SEC);
-
-	duration = stop - start;
-	
-	*(sonar->distance) = (soundVelocity * duration) / 2;
-	usleep(100);
-	}
-	return NULL;
-}
-*/
-	
-

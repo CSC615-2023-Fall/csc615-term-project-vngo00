@@ -225,23 +225,6 @@ void *masterControl(void *arg) {
     int speed = 85;  // Initial speed to overcome static friction
     int constantSpeed = 80;  // Constant speed for normal operation
     int left = 0;
-	
-    setDirection(FORWARD);
-    //curve(82,86);
-    //forward(100, FORWARD);
-  //  sleep(100);
-   
-
-    // testing purposes
-    volatile double leftSpeed = 90;
-    volatile double rightSpeed = 0;
-    volatile int avoiding = 0;
-    volatile double mult = 1.0;
-
-	speed = 85;
-
-
-
     while (!terminate) {
         //pthread_mutex_lock(&sensorMutex);
         int sensors = combinedSensorsValue;
@@ -260,54 +243,99 @@ void *masterControl(void *arg) {
     //Obstacle avoidance logic
    // if(obstacleFront){
    if(!IRfront){
+	   speed = 85;
+	// rorate to the right until left hit
+	while(!( IRleft == 1 && IRside == 0 )){
 
+		printf("step 1\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+		rotate(speed, RIGHT);
+	}
 	
-	//forward(speed, REVERSE);
-	//usleep(300000);
-	//curve(leftSpeed, rightSpeed);
-	//usleep(500000);
-	while (avoiding ||  IRfront == 0 || combinedSensorsValue == 0 ) {
-	    if ((int)rightSpeed > 90){
-		    rightSpeed =90.0;
-	    }
-	    if ( (int) rightSpeed < 40) {
-		    rightSpeed = 40.0;
-	    }
-	    if ( (int) leftSpeed > 90) {
-		    leftSpeed =90.0;
-	    }
-	    if ( (int) leftSpeed < 40) {
-		    leftSpeed = 40.0;
-	    }
-	    curve(leftSpeed, rightSpeed);	
-	    printf("left: %.2f\n right %.2f\n", leftSpeed, rightSpeed);
-	    if (IRfront == 0 || (IRleft == 0 && IRside == 0) || IRleft == 0){
-			rightSpeed -= (0.54);
-			leftSpeed += (0.4 );
-		//	mult += 0.1;
-	    } else { // turnign left
-		    rightSpeed += (1.2);
-		    leftSpeed -= ( 1.0);
-		    //mult -= 0.1;
-	    }
-		/*
-	    if ( (int) mult < 1) {
-		    mult = 1.0;
-	    }
-	    else if ( (int) mult >= 2) {
-		    mult = 2.0;
-	    }
-	    printf("multiplier factor : %f\n", mult);
-	    */
-	    //usleep(100);
-    	}	
-
-
+	// straight until side not hit (or 1)
 	while(IRside == 0) {
+		printf("step 2\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+		forward(speed, FORWARD);
+	}
+
+	// turn left until left hit (or 0)
+	while(IRleft == 1) {
+		printf("step 3\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+		turnLeft(speed);	
+	}
+
+	// straight till side hit == 0
+	while(IRside == 1){
+		
+		printf("step 4\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+		forward(speed, FORWARD);
+	}
+
+	// straight til side not hit
+	while(IRside == 0 ){
+		forward(speed, FORWARD);
+		printf("step 5\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+	}
+
+	// turn left until left sensor hit == 0
+	while(IRleft == 1) {
+		turnLeft(speed);
+		printf("step 6\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+	}
+
+	// straight until side hit == 0
+	while(IRside == 1){
+		forward(speed, FORWARD);
+		printf("step 7\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+	}
+
+	// turn right a bit maybe
+	
+
+	// staright until hit the line
+	while(combinedSensorsValue == 0) {
+		forward(speed, FORWARD);
+		printf("step 8\n");
+		printf("value of left: %d\n value of side: %d\n", IRleft, IRside);
+	}
+
+	// turn right until left not hit == 1
+	while(IRleft == 0 || IRside == 0){
 		turnRight(speed);
 	}
 
 
+
+	/*
+	//printf("left ir sensor: %d\n", IRleft);
+	printf("front ir sensor: %d\n", IRfront);
+	//printf("right ir sensor: %d\n\n\n", IRright);
+
+	forward(speed, REVERSE);
+	printf("reversing");
+	usleep(500000);
+	
+	forward(speed, FORWARD);
+	turnRight(speed);
+	sleep(1);
+
+	forward(speed, FORWARD);
+	usleep(500000);
+
+	turnLeft(speed);
+	usleep(1000000);
+
+	forward(speed, FORWARD);
+	usleep(1500000);
+   	
+	turnLeft(speed);
+	*/
     } else {
         switch (sensors) {
             case 0:   // 000 - lost the line
@@ -358,8 +386,6 @@ void *masterControl(void *arg) {
 	
 
     }
-    leftSpeed = 90;
-    rightSpeed = 0;
         
 
         usleep(10000);  // 100 ms delay

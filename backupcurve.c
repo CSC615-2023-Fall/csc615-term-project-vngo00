@@ -358,8 +358,6 @@ void *masterControl(void *arg) {
 	
 
     }
-    leftSpeed = 90;
-    rightSpeed = 0;
         
 
         usleep(10000);  // 100 ms delay
